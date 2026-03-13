@@ -131,6 +131,7 @@ def generate_web_html() -> str:
   </div>
   <script>
     const STORAGE_KEY = 'dos_data_entry';
+    function esc(v) { if (v == null || v === undefined) return ''; return String(v).replace(/\\\\/g,'\\\\\\\\').replace(/`/g,'\\\\`').replace(/\\$\\{/g,'\\${'); }
     let EMP = [];
     let filter = 'operators';
     let selectedIdx = 0;
@@ -245,7 +246,7 @@ def generate_web_html() -> str:
     function renderList() {
       const list = document.getElementById('empList');
       const F = filtered();
-      list.innerHTML = F.map((e, i) => `<div class="emp-item ${e.skip ? 'skip' : ''} ${processed.has(e.employee_id) ? 'done' : ''} ${i === selectedIdx ? 'active' : ''}" data-idx="${i}" data-id="${e.employee_id}"><span class="check">${processed.has(e.employee_id) ? '✓' : ''}</span><div><div>${e.name}</div><div class="emp-id" style="font-size:0.75rem;margin-top:2px">ID ${e.employee_id}${e.skip ? ' · Skip' : ''}</div></div></div>`).join('');
+      list.innerHTML = F.map((e, i) => `<div class="emp-item ${e.skip ? 'skip' : ''} ${processed.has(e.employee_id) ? 'done' : ''} ${i === selectedIdx ? 'active' : ''}" data-idx="${i}" data-id="${esc(e.employee_id)}"><span class="check">${processed.has(e.employee_id) ? '✓' : ''}</span><div><div>${esc(e.name)}</div><div class="emp-id" style="font-size:0.75rem;margin-top:2px">ID ${esc(e.employee_id)}${e.skip ? ' · Skip' : ''}</div></div></div>`).join('');
       list.querySelectorAll('.emp-item').forEach(el => el.addEventListener('click', () => { selectEmp(parseInt(el.dataset.idx)); }));
     }
 
@@ -257,21 +258,21 @@ def generate_web_html() -> str:
       const runsHtml = e.runs.map(r => {
         const segments = getActualSegments(r);
         const noteBanners = [];
-        if (r.driver_notes) noteBanners.push(`<div class="note-banner"><div class="note-banner-label">Driver Notes:</div><div class="note-banner-content">${r.driver_notes}</div></div>`);
-        if (r.internal_notes) noteBanners.push(`<div class="note-banner"><div class="note-banner-label">Internal Notes:</div><div class="note-banner-content">${r.internal_notes}</div></div>`);
-        if (r.labels) noteBanners.push(`<div class="note-banner"><div class="note-banner-label">Labels:</div><div class="note-banner-content">${r.labels}</div></div>`);
+        if (r.driver_notes) noteBanners.push(`<div class="note-banner"><div class="note-banner-label">Driver Notes:</div><div class="note-banner-content">${esc(r.driver_notes)}</div></div>`);
+        if (r.internal_notes) noteBanners.push(`<div class="note-banner"><div class="note-banner-label">Internal Notes:</div><div class="note-banner-content">${esc(r.internal_notes)}</div></div>`);
+        if (r.labels) noteBanners.push(`<div class="note-banner"><div class="note-banner-label">Labels:</div><div class="note-banner-content">${esc(r.labels)}</div></div>`);
         let actualHtml;
         if (segments && segments.length > 0) {
-          actualHtml = '<div class="actual-segments">' + segments.map(s => `<div class="segment-line ${s.type}"><span class="seg-code">${s.code}</span>${s.start} – ${s.end}</div>`).join('') + '<div class="segment-total">' + hrsToHMM(r.actual_hrs) + '</div></div>';
+          actualHtml = '<div class="actual-segments">' + segments.map(s => `<div class="segment-line ${s.type}"><span class="seg-code">${esc(s.code)}</span>${esc(s.start)} – ${esc(s.end)}</div>`).join('') + '<div class="segment-total">' + hrsToHMM(r.actual_hrs) + '</div></div>';
         } else {
           const needsG = isShort(r.planned_hrs, r.actual_hrs);
           const needsOT = isOT(r.planned_hrs, r.actual_hrs);
-          actualHtml = `<div class="run-group-time">${r.actual_start} – ${r.actual_end}</div><div class="run-group-hrs ${needsOT ? 'ot' : 'hrs'}">${formatHrs(r.actual_hrs)} hrs${needsG ? ' ⚠ Guarantee' : ''}${needsOT ? ' OT' : ''}</div>`;
+          actualHtml = `<div class="run-group-time">${esc(r.actual_start)} – ${esc(r.actual_end)}</div><div class="run-group-hrs ${needsOT ? 'ot' : 'hrs'}">${formatHrs(r.actual_hrs)} hrs${needsG ? ' ⚠ Guarantee' : ''}${needsOT ? ' OT' : ''}</div>`;
         }
-        return `<div class="run-card"><div class="run-header"><span class="run-paddle">${r.paddle}</span>${r.block ? '<span class="run-block">Block ' + r.block + '</span>' : ''}</div><div class="run-times"><div class="run-group"><div class="run-group-label">Planned</div><div class="run-group-time">${r.planned_start} – ${r.planned_end}</div><div class="run-group-hrs hrs">${formatHrs(r.planned_hrs)} hrs</div></div><div class="run-group"><div class="run-group-label">Actual</div>${actualHtml}</div></div>${r.vehicle ? '<div class="run-time" style="margin-top:0.5rem"><span class="run-time-label">Vehicle</span><span class="run-time-val">' + r.vehicle + '</span></div>' : ''}${noteBanners.join('')}</div>`;
+        return `<div class="run-card"><div class="run-header"><span class="run-paddle">${esc(r.paddle)}</span>${r.block ? '<span class="run-block">Block ' + esc(r.block) + '</span>' : ''}</div><div class="run-times"><div class="run-group"><div class="run-group-label">Planned</div><div class="run-group-time">${esc(r.planned_start)} – ${esc(r.planned_end)}</div><div class="run-group-hrs hrs">${formatHrs(r.planned_hrs)} hrs</div></div><div class="run-group"><div class="run-group-label">Actual</div>${actualHtml}</div></div>${r.vehicle ? '<div class="run-time" style="margin-top:0.5rem"><span class="run-time-label">Vehicle</span><span class="run-time-val">' + esc(r.vehicle) + '</span></div>' : ''}${noteBanners.join('')}</div>`;
       }).join('');
 
-      main.innerHTML = `<div class="emp-card"><div class="emp-header"><div><div class="emp-name">${e.name}</div><div class="emp-id">Employee ID: ${e.employee_id}</div></div><span class="badge ${e.employee_type}">${e.skip ? 'Skip (Supervisor)' : 'Operator'}</span></div><div class="runs">${runsHtml}</div>${!e.skip ? '<div class="entry-section"><h4>Notes</h4><div class="entry-row"><label>Notes</label><input type="text" placeholder="Optional notes for this employee..." id="entryNotes"></div></div>' : ''}<div class="nav-bar"><button class="nav-btn" id="btnPrev">← Previous</button><div class="progress">${filtered().findIndex(x => x.employee_id === e.employee_id) + 1} / ${filtered().length}</div><div>${!e.skip ? '<button class="nav-btn primary" id="btnDone">Mark Done & Next</button>' : ''}<button class="nav-btn" id="btnNext">Next →</button></div></div></div>`;
+      main.innerHTML = `<div class="emp-card"><div class="emp-header"><div><div class="emp-name">${esc(e.name)}</div><div class="emp-id">Employee ID: ${esc(e.employee_id)}</div></div><span class="badge ${e.employee_type}">${e.skip ? 'Skip (Supervisor)' : 'Operator'}</span></div><div class="runs">${runsHtml}</div>${!e.skip ? '<div class="entry-section"><h4>Notes</h4><div class="entry-row"><label>Notes</label><input type="text" placeholder="Optional notes for this employee..." id="entryNotes"></div></div>' : ''}<div class="nav-bar"><button class="nav-btn" id="btnPrev">← Previous</button><div class="progress">${filtered().findIndex(x => x.employee_id === e.employee_id) + 1} / ${filtered().length}</div><div>${!e.skip ? '<button class="nav-btn primary" id="btnDone">Mark Done & Next</button>' : ''}<button class="nav-btn" id="btnNext">Next →</button></div></div></div>`;
 
       const id = e.employee_id;
       const notesInput = document.getElementById('entryNotes');
@@ -300,7 +301,7 @@ def generate_web_html() -> str:
         if (confirm('Clear progress and notes? (Keeps current data, use when starting a new day with same file)')) { processed.clear(); entries = {}; localStorage.removeItem(STORAGE_KEY + '_done'); localStorage.removeItem(STORAGE_KEY + '_entries'); renderList(); renderEmp(); }
       };
       document.getElementById('startFresh').onclick = async () => {
-        if (!confirm('Start completely fresh? This clears all data and progress. You\'ll need to upload a new Excel file.')) return;
+        if (!confirm('Start completely fresh? This clears all data and progress. You\\'ll need to upload a new Excel file.')) return;
         try {
           await fetch('/api/clear', { method: 'POST' });
         } catch (e) {}
