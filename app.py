@@ -41,10 +41,11 @@ def api_upload():
         return jsonify({"error": "No file selected"}), 400
     if not file.filename.lower().endswith((".xlsx", ".xls")):
         return jsonify({"error": "File must be Excel (.xlsx or .xls)"}), 400
+    format_hint = request.form.get("format") or None  # "standard" | "raw" | None (auto)
     try:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             file.save(tmp.name)
-            _dos_data = extract_dos_data(tmp.name)
+            _dos_data = extract_dos_data(tmp.name, format=format_hint)
         os.unlink(tmp.name)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

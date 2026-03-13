@@ -6,6 +6,10 @@ A simple UI for transit department DOS (Days of Service) data entry, replacing c
 
 Connect this repo in [Railway](https://railway.app) — it will auto-detect Python and deploy. On first visit, upload your DOS Excel (.xlsx) to get started.
 
+**Supported formats:**
+- **Standard** — Excel with "Table 1" sheet and SUPERVISORS/ABSENT sections
+- **Raw report** — DOS_Report_*.xlsx with date-named sheet (e.g. 2026-03-11), flat list. Check "Raw report format" when uploading.
+
 ## Local development
 
 ```bash

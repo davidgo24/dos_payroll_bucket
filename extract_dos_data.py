@@ -4,10 +4,12 @@ Extract full DOS (Days of Service) data for the data entry UI.
 Builds rich per-employee records with all run/segment details.
 """
 
-import openpyxl
 import json
+import re
 from pathlib import Path
 from collections import defaultdict
+
+import openpyxl
 
 
 def is_valid_name(name: str) -> bool:
@@ -26,12 +28,8 @@ def normalize_name(name: str) -> str:
     return " ".join(name.strip().split())
 
 
-def extract_dos_data(excel_path: str) -> dict:
-    """Extract full run data per employee for UI."""
-    wb = openpyxl.load_workbook(excel_path, read_only=True)
-    ws = wb["Table 1"]
-
-    # Column indices (0-based)
+def _extract_from_sheet(ws, use_supervisor_sections: bool) -> tuple:
+    """Extract from a worksheet. Returns (by_employee dict, date_str or None)."""
     COLS = {
         "paddle": 0,
         "block": 1,
@@ -56,19 +54,27 @@ def extract_dos_data(excel_path: str) -> dict:
     absent_header_row = None
     by_employee = defaultdict(lambda: {"runs": [], "in_supervisor_section": False, "in_operator_section": False})
 
-    for row_idx, row in enumerate(ws.iter_rows(values_only=True)):
+    rows = list(ws.iter_rows(values_only=True))
+    # Try to get date from sheet name (YYYY-MM-DD)
+    date_str = None
+    if ws.title and re.match(r"^\d{4}-\d{2}-\d{2}$", str(ws.title).strip()):
+        date_str = str(ws.title).strip()
+
+    for row_idx, row in enumerate(rows):
         row = list(row)
         paddle = str(row[COLS["paddle"]] or "").strip()
 
-        if paddle.upper() == "SUPERVISORS":
-            supervisor_header_row = row_idx
-            continue
-        if paddle.upper() == "ABSENT":
-            absent_header_row = row_idx
-
-        after_supervisor = supervisor_header_row is not None and row_idx > supervisor_header_row
-        before_absent = absent_header_row is None or row_idx < absent_header_row
-        is_supervisor_row = after_supervisor and before_absent
+        if use_supervisor_sections:
+            if paddle.upper() == "SUPERVISORS":
+                supervisor_header_row = row_idx
+                continue
+            if paddle.upper() == "ABSENT":
+                absent_header_row = row_idx
+            after_supervisor = supervisor_header_row is not None and row_idx > supervisor_header_row
+            before_absent = absent_header_row is None or row_idx < absent_header_row
+            is_supervisor_row = after_supervisor and before_absent
+        else:
+            is_supervisor_row = False  # Raw format: no supervisor sections, all operators
 
         run = {
             "paddle": paddle,
@@ -118,6 +124,28 @@ def extract_dos_data(excel_path: str) -> dict:
             else:
                 by_employee[key]["in_operator_section"] = True
 
+    return by_employee, date_str
+
+
+def extract_dos_data(excel_path: str, format: str = None) -> dict:
+    """
+    Extract full run data per employee for UI.
+    format: 'standard' (Table 1 sheet, SUPERVISORS/ABSENT sections), 'raw' (first sheet, flat list), or None (auto-detect)
+    """
+    wb = openpyxl.load_workbook(excel_path, read_only=True)
+
+    # Auto-detect format
+    if format is None:
+        format = "standard" if "Table 1" in wb.sheetnames else "raw"
+
+    if format == "standard":
+        ws = wb["Table 1"]
+        use_supervisor_sections = True
+    else:
+        ws = wb.worksheets[0]
+        use_supervisor_sections = False
+
+    by_employee, date_str = _extract_from_sheet(ws, use_supervisor_sections)
     wb.close()
 
     # Build final list with employee_type
@@ -138,16 +166,17 @@ def extract_dos_data(excel_path: str) -> dict:
             "skip": emp_type in ("supervisor", "both"),
             "runs": data["runs"],
         })
-    return {"employees": employees, "date": "3/9/2026"}
+    return {"employees": employees, "date": date_str or "3/9/2026"}
 
 
 def main():
     import sys
     path = sys.argv[1] if len(sys.argv) > 1 else "/Users/david/Downloads/3.9.26.xlsx"
+    fmt = sys.argv[2] if len(sys.argv) > 2 else None  # 'standard' or 'raw' to override auto-detect
     if not Path(path).exists():
         print(f"File not found: {path}")
         return 1
-    data = extract_dos_data(path)
+    data = extract_dos_data(path, format=fmt)
     out_dir = Path(__file__).resolve().parent
     out_json = out_dir / "dos_data.json"
     with open(out_json, "w") as f:

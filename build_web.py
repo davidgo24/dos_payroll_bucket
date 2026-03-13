@@ -106,6 +106,12 @@ def generate_web_html() -> str:
       <p>Upload your DOS Excel file to get started.</p>
       <form id="uploadForm" onsubmit="return false;">
         <input type="file" name="file" accept=".xlsx,.xls" id="fileInput" required>
+        <div style="text-align:left;margin:0.75rem 0;font-size:0.85rem;">
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;color:var(--text-muted);">
+            <input type="checkbox" id="formatRaw" name="format" value="raw">
+            <span>Raw report format (DOS_Report_*.xlsx)</span>
+          </label>
+        </div>
         <button type="button" class="nav-btn primary" id="uploadBtn">Upload & Load</button>
       </form>
       <p id="uploadError" class="error"></p>
@@ -169,6 +175,7 @@ def generate_web_html() -> str:
       err.textContent = '';
       const fd = new FormData();
       fd.append('file', input.files[0]);
+      if (document.getElementById('formatRaw').checked) fd.append('format', 'raw');
       try {
         const r = await fetch('/api/upload', { method: 'POST', body: fd });
         const j = await r.json().catch(() => ({}));
