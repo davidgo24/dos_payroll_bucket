@@ -1,20 +1,30 @@
 """
 DOS Data Entry — Transit
 Flask app for Railway deployment.
+Each visitor gets an isolated session — upload and work independently.
 """
 import os
 import re
 import tempfile
+import uuid
 from pathlib import Path
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session
 from extract_dos_data import extract_dos_data
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 
-# In-memory store for extracted data (single-tenant for transit dept)
-_dos_data = None
+# Per-session DOS data: { session_id: { employees, date } }
+_dos_data: dict[str, dict] = {}
+
+
+def _uid():
+    """Get or create a unique session id for this visitor."""
+    if "uid" not in session:
+        session["uid"] = str(uuid.uuid4())
+    return session["uid"]
 
 
 @app.route("/")
@@ -25,16 +35,17 @@ def index():
 @app.route("/api/data")
 def api_data():
     """Return extracted DOS data or 404 if none loaded."""
-    global _dos_data
-    if _dos_data is None:
+    uid = _uid()
+    data = _dos_data.get(uid)
+    if data is None:
         return jsonify({"error": "No data loaded. Upload an Excel file first."}), 404
-    return jsonify(_dos_data)
+    return jsonify(data)
 
 
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
-    """Accept Excel file, extract data, store in memory."""
-    global _dos_data
+    """Accept Excel file, extract data, store per-session."""
+    uid = _uid()
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
     file = request.files["file"]
@@ -46,23 +57,24 @@ def api_upload():
     try:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             file.save(tmp.name)
-            _dos_data = extract_dos_data(tmp.name, format=format_hint)
+            data = extract_dos_data(tmp.name, format=format_hint)
         os.unlink(tmp.name)
         # Prefer first date from filename (schedule date; ignore generated_at date)
         m = re.search(r"\d{4}-\d{2}-\d{2}", file.filename or "")
         if m:
-            _dos_data["date"] = m.group(0)
+            data["date"] = m.group(0)
+        _dos_data[uid] = data
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    # Return full data so client doesn't need to refetch (avoids multi-instance / reload issues)
-    return jsonify(_dos_data)
+    return jsonify(data)
 
 
 @app.route("/api/clear", methods=["POST"])
 def api_clear():
-    """Clear server-side DOS data (resets to upload screen on reload)."""
-    global _dos_data
-    _dos_data = None
+    """Clear this session's DOS data (resets to upload screen on reload)."""
+    uid = _uid()
+    if uid in _dos_data:
+        del _dos_data[uid]
     return jsonify({"ok": True})
 
 
